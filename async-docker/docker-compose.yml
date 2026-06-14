@@ -136,6 +136,19 @@ services:
     networks:
       - laravel-net
 
+  order-service-worker:
+    build:
+      context: ./order-service
+    container_name: order-service-worker
+    command: php artisan queue:work --sleep=3 --tries=3
+    volumes:
+      - ./order-service:/var/www
+    networks:
+      - laravel-net
+    depends_on:
+      - redis
+      - order-service-db
+
   # ─── Notification Service ────────────────────────────
   notification-service-app:
     build:

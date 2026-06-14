@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\UpdateProductStockJob;
 use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -35,9 +36,7 @@ class OrderController extends Controller
         ]);
 
         // Kirim job ke Redis queue (asinkron) untuk update stok
-        Http::post(env('PRODUCT_SERVICE_URL') . '/products/' . $request->product_id . '/update-stock', [
-            'product_quantity' => $request->quantity,
-        ]);
+        UpdateProductStockJob::dispatch($request->product_id, $request->quantity);
 
         return response()->json([
             'status'  => 'Success',
@@ -58,15 +57,29 @@ class OrderController extends Controller
             ], 404);
         }
 
+        $data = $order->toArray();
+        $data['product'] = null;
+        $data['user']    = null;
+
         // Ambil detail product dari product-service
-        $product = Http::get(env('PRODUCT_SERVICE_URL') . '/products/' . $order->product_id);
+        try {
+            $product = Http::timeout(2)->get(env('PRODUCT_SERVICE_URL') . '/products/' . $order->product_id);
+            if ($product->successful()) {
+                $data['product'] = $product->json('data');
+            }
+        } catch (\Exception $e) {
+            // product-service belum tersedia, abaikan untuk sekarang
+        }
 
         // Ambil detail user dari user-service
-        $user = Http::get(env('USER_SERVICE_URL') . '/users/' . $order->user_id);
-
-        $data = $order->toArray();
-        $data['product'] = $product->json('data');
-        $data['user']    = $user->json('data');
+        try {
+            $user = Http::timeout(2)->get(env('USER_SERVICE_URL') . '/users/' . $order->user_id);
+            if ($user->successful()) {
+                $data['user'] = $user->json('data');
+            }
+        } catch (\Exception $e) {
+            // user-service belum tersedia, abaikan untuk sekarang
+        }
 
         return response()->json([
             'status'  => 'Success',

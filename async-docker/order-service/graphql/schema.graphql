@@ -1,0 +1,36 @@
+type Order {
+    id: ID!
+    code: String!
+    product_id: String!
+    user_id: String!
+    status: String!
+    total_price: Float!
+    quantity: Int!
+    created_at: String
+    updated_at: String
+}
+
+type Query {
+    orders: [Order!]! @all
+    order(id: ID! @eq): Order @find
+    ordersByUser(user_id: String! @eq): [Order!]! @all
+}
+
+type Mutation {
+    createOrder(
+        product_id: String!
+        user_id: String!
+        status: String
+        total_price: Float!
+        quantity: Int!
+    ): Order @create
+
+    updateOrder(
+        id: ID!
+        status: String
+        total_price: Float
+        quantity: Int
+    ): Order @update
+
+    deleteOrder(id: ID!): Order @delete
+}
