@@ -1,52 +1,103 @@
+networks:
+  laravel-net:
+    driver: bridge
 
 services:
 
-    app:
-        build: .
-        container_name: talis-app
+  product-service-app:
+    build: .
+    container_name: product-service-app
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+    networks:
+      - laravel-net
+    depends_on:
+      - product-service-db
+      - product-postgres
+      - redis
 
-        working_dir: /var/www
+  product-service-nginx:
+    image: nginx:stable-alpine
+    container_name: product-service-nginx
+    ports:
+      - "8001:80"
+    volumes:
+      - .:/var/www
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - laravel-net
+    depends_on:
+      - product-service-app
 
-        volumes:
-            - ./:/var/www
+  product-service-worker:
+    build: .
+    container_name: product-service-worker
+    command: php artisan queue:work --sleep=3 --tries=3
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+    networks:
+      - laravel-net
+    depends_on:
+      - redis
+      - product-service-db
 
-        ports:
-            - "8000:8000"
+  product-service-db:
+    image: mysql:8
+    container_name: product-service-db
+    environment:
+      MYSQL_DATABASE: product_db
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3308:3306"
+    volumes:
+      - product_mysql_data:/var/lib/mysql
+    networks:
+      - laravel-net
 
-        depends_on:
-            - mysql
-            - redis
+  product-postgres:
+    image: postgres:15-alpine
+    container_name: product-postgres
+    environment:
+      POSTGRES_DB: product_logs_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5434:5432"
+    volumes:
+      - product_postgres_data:/var/lib/postgresql/data
+    networks:
+      - laravel-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d product_logs_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-    queue:
-        build: .
-        container_name: talis-queue
+  product-hasura:
+    image: hasura/graphql-engine:v2.36.0
+    container_name: product-hasura
+    ports:
+      - "8081:8080"
+    networks:
+      - laravel-net
+    environment:
+      HASURA_GRAPHQL_DATABASE_URL: postgres://admin:secret@product-postgres:5432/product_logs_db
+      HASURA_GRAPHQL_ENABLE_CONSOLE: "true"
+      HASURA_GRAPHQL_DEV_MODE: "true"
+    depends_on:
+      product-postgres:
+        condition: service_healthy
 
-        command: php artisan queue:work
+  redis:
+    image: redis:alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - laravel-net
 
-        working_dir: /var/www
-
-        volumes:
-            - ./:/var/www
-
-        depends_on:
-            - redis
-
-    mysql:
-        image: mysql:8.0
-
-        container_name: talis-mysql
-
-        environment:
-            MYSQL_DATABASE: talis_db
-            MYSQL_ROOT_PASSWORD: root
-
-        ports:
-            - "3307:3306"
-
-    redis:
-        image: redis:latest
-
-        container_name: talis-redis
-
-        ports:
-            - "6379:6379"
+volumes:
+  product_mysql_data:
+  product_postgres_data:

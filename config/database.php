@@ -64,6 +64,19 @@ return [
             ]) : [],
         ],
 
+        'pgsql' => [
+            'driver'   => 'pgsql',
+            'host'     => env('DB_PGSQL_HOST', '127.0.0.1'),
+            'port'     => env('DB_PGSQL_PORT', '5432'),
+            'database' => env('DB_PGSQL_DATABASE', 'product_logs_db'),
+            'username' => env('DB_PGSQL_USERNAME', 'admin'),
+            'password' => env('DB_PGSQL_PASSWORD', 'secret'),
+            'charset'  => 'utf8',
+            'prefix'   => '',
+            'schema'   => 'public',
+            'sslmode'  => 'prefer',
+        ],
+
         'mariadb' => [
             'driver' => 'mariadb',
             'url' => env('DB_URL'),
@@ -149,7 +162,7 @@ return [
 
         'options' => [
             'cluster' => env('REDIS_CLUSTER', 'redis'),
-            'prefix' => env('REDIS_PREFIX', Str::slug((string) env('APP_NAME', 'laravel')).'-database-'),
+            'prefix' => env('REDIS_PREFIX', Str::slug((string) env('APP_NAME', 'laravel')) . '-database-'),
             'persistent' => env('REDIS_PERSISTENT', false),
         ],
 
