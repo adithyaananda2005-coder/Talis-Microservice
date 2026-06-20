@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: product-service
+  template:
+    metadata:
+      labels:
+        app: product-service
+    spec:
+      initContainers:
+        - name: copy-files
+          image: async-docker-product-service-app:latest
+          imagePullPolicy: Never
+          command: ['sh', '-c', 'cp -r /var/www/. /app/']
+          volumeMounts:
+            - name: app-files
+              mountPath: /app
+      containers:
+        - name: php
+          image: async-docker-product-service-app:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 9000
+          env:
+            - name: DB_HOST
+              value: product-service-db
+            - name: DB_DATABASE
+              value: product_db
+            - name: DB_USERNAME
+              value: root
+            - name: DB_PASSWORD
+              value: root
+            - name: REDIS_HOST
+              value: redis
+            - name: QUEUE_CONNECTION
+              value: redis
+            - name: CACHE_STORE
+              value: file
+            - name: SESSION_DRIVER
+              value: file
+            - name: REDIS_CLIENT
+              value: predis
+          volumeMounts:
+            - name: app-files
+              mountPath: /var/www
+        - name: nginx
+          image: nginx:stable-alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d
+            - name: app-files
+              mountPath: /var/www
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: product-nginx-config
+        - name: app-files
+          emptyDir: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: product-nginx-config
+data:
+  default.conf: |
+    server {
+        listen 80;
+        index index.php index.html;
+        root /var/www/public;
+        location / {
+            try_files $uri $uri/ /index.php?$query_string;
+        }
+        location ~ \.php$ {
+            try_files $uri =404;
+            fastcgi_split_path_info ^(.+\.php)(/.+)$;
+            fastcgi_pass localhost:9000;
+            fastcgi_index index.php;
+            include fastcgi_params;
+            fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+            fastcgi_param PATH_INFO $fastcgi_path_info;
+            fastcgi_param DOCUMENT_ROOT $realpath_root;
+        }
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+spec:
+  selector:
+    app: product-service
+  ports:
+    - port: 80
+      targetPort: 80
+  type: NodePort
